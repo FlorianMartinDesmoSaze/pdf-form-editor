@@ -1,0 +1,15 @@
+# Local Python environment and temporary uploads
+backend/venv/
+backend/uploads/
+backend/test*.pdf
+backend/__pycache__/
+
+# Node and Next.js build artefacts
+frontend/node_modules/
+frontend/.next/
+
+# Local configuration and operating-system files
+.env
+.env.*
+.DS_Store
+Thumbs.db

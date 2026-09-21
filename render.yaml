@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: pdf-form-editor
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /api/pdf/health
