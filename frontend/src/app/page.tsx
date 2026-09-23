@@ -8,6 +8,10 @@ import { FormField } from './PdfViewer';
 
 const PdfViewer = dynamic(() => import('./PdfViewer'), { ssr: false });
 
+// Kept deliberately: automatic field detection can be re-enabled once its
+// accuracy has been improved, without having to rebuild the upload workflow.
+const AUTOMATIC_DETECTION_ENABLED = false;
+
 // --- SVG Icons ---
 const IconScan = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/></svg>;
 const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
@@ -212,7 +216,9 @@ export default function Home() {
     setFormFields([]);
     const buffer = await selectedFile.arrayBuffer();
     setFileBuffer(buffer);
-    await handleUploadAndDetect(selectedFile);
+    if (AUTOMATIC_DETECTION_ENABLED) {
+      await handleUploadAndDetect(selectedFile);
+    }
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,7 +483,7 @@ export default function Home() {
                   <IconUpload />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-700 mb-2">Drag & Drop a PDF Here</h3>
-                <p className="text-slate-400 font-medium mb-8 text-center max-w-sm text-sm">Or click to browse. Fields are auto-detected using AI.</p>
+            <p className="text-slate-400 font-medium mb-8 text-center max-w-sm text-sm">Or click to browse. Add text, date, checkbox, and signature fields wherever you need them.</p>
                 <div className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 group-hover:bg-blue-700 transition-all">
                   Browse Files
                 </div>
@@ -494,8 +500,8 @@ export default function Home() {
             )}
           </div>
 
-          {/* Right Sidebar – Scan Summary */}
-          {fileUrl && (
+          {/* The detection summary remains available when automatic detection is re-enabled. */}
+          {AUTOMATIC_DETECTION_ENABLED && fileUrl && (
             <div className="w-64 flex-shrink-0 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-fit sticky top-4 animate-in fade-in slide-in-from-right-4 duration-500">
               <h2 className="text-base font-bold mb-5 text-slate-800 flex items-center gap-2">
                 <IconScan />
