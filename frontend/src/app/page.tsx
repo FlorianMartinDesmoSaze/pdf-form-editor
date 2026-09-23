@@ -5,6 +5,7 @@ import axios from 'axios';
 import { PDFDocument, rgb } from 'pdf-lib';
 import dynamic from 'next/dynamic';
 import { FormField } from './PdfViewer';
+import { detectLanguage, supportedLanguages, translate, type Language, type TranslationKey } from './i18n';
 
 const PdfViewer = dynamic(() => import('./PdfViewer'), { ssr: false });
 
@@ -12,12 +13,15 @@ const PdfViewer = dynamic(() => import('./PdfViewer'), { ssr: false });
 // accuracy has been improved, without having to rebuild the upload workflow.
 const AUTOMATIC_DETECTION_ENABLED = false;
 
+type DetectionResult = {
+  fields?: Array<Pick<FormField, 'pageIndex' | 'type' | 'x' | 'y' | 'width' | 'height'>>;
+};
+
 // --- SVG Icons ---
 const IconScan = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/></svg>;
 const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>;
 const IconCheckSquare = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
 const IconCalendar = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
-const IconHash = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>;
 const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>;
 const IconSpinner = () => <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
 const IconType = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></svg>;
@@ -33,7 +37,7 @@ function hexToRgb(hex: string) {
 }
 
 // --- Signature Pad Modal ---
-const SignaturePad = ({ onSave, onClose }: { onSave: (dataUrl: string) => void, onClose: () => void }) => {
+const SignaturePad = ({ onSave, onClose, t }: { onSave: (dataUrl: string) => void, onClose: () => void, t: (key: TranslationKey) => string }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasStrokes, setHasStrokes] = useState(false);
@@ -97,10 +101,10 @@ const SignaturePad = ({ onSave, onClose }: { onSave: (dataUrl: string) => void, 
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold text-slate-800">Draw Your Signature</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"><IconX /></button>
+          <h3 className="text-xl font-bold text-slate-800">{t('drawSignature')}</h3>
+          <button onClick={onClose} aria-label={t('cancel')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600"><IconX /></button>
         </div>
-        <p className="text-sm text-slate-400">Sign below, then click on the document to place it.</p>
+        <p className="text-sm text-slate-400">{t('signatureHelp')}</p>
         <div className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 overflow-hidden cursor-crosshair touch-none relative">
           <canvas
             ref={canvasRef}
@@ -117,17 +121,17 @@ const SignaturePad = ({ onSave, onClose }: { onSave: (dataUrl: string) => void, 
           />
           {!hasStrokes && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-slate-300 text-lg font-light italic">Sign here…</span>
+              <span className="text-slate-300 text-lg font-light italic">{t('signHere')}</span>
             </div>
           )}
         </div>
         <div className="flex justify-between mt-1">
           <button onClick={handleClear} className="text-slate-400 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-100 transition-all text-sm">
-            Clear
+            {t('clear')}
           </button>
           <div className="flex gap-2">
             <button onClick={onClose} className="bg-slate-100 text-slate-600 px-5 py-2 rounded-xl font-semibold hover:bg-slate-200 transition-all text-sm">
-              Cancel
+              {t('cancel')}
             </button>
             <button
               disabled={!hasStrokes}
@@ -136,7 +140,7 @@ const SignaturePad = ({ onSave, onClose }: { onSave: (dataUrl: string) => void, 
               }}
               className="bg-blue-600 text-white px-5 py-2 rounded-xl font-semibold hover:bg-blue-700 shadow-md disabled:bg-slate-200 disabled:text-slate-400 transition-all text-sm"
             >
-              Use Signature →
+              {t('useSignature')} →
             </button>
           </div>
         </div>
@@ -167,9 +171,14 @@ export default function Home() {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
-  const [results, setResults] = useState<any>(null);
+  const [results, setResults] = useState<DetectionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [undoStack, setUndoStack] = useState<FormField[][]>([]);
+  const [redoStack, setRedoStack] = useState<FormField[][]>([]);
+  const previousFields = useRef<FormField[]>([]);
+  const restoringHistory = useRef(false);
+  const [language, setLanguage] = useState<Language>('en');
 
   const [isDragging, setIsDragging] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -178,16 +187,80 @@ export default function Home() {
 
   // Signature flow: null = no sig, 'drawing' = pad open, string = dataUrl ready to place
   const [sigState, setSigState] = useState<null | 'drawing' | string>(null);
+  const t = (key: TranslationKey) => translate(language, key);
+
+  useEffect(() => {
+    const detectedLanguage = detectLanguage(navigator.languages);
+    document.documentElement.lang = detectedLanguage;
+    const timeoutId = window.setTimeout(() => setLanguage(detectedLanguage), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    if (restoringHistory.current) {
+      restoringHistory.current = false;
+      previousFields.current = formFields;
+      return;
+    }
+    const previous = previousFields.current;
+    if (previous !== formFields && (previous.length > 0 || formFields.length > 0)) {
+      setUndoStack(stack => [...stack.slice(-49), previous]);
+      setRedoStack([]);
+    }
+    previousFields.current = formFields;
+  }, [formFields]);
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (formFields.length === 0) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [formFields.length]);
+
+  const resetDocumentState = () => {
+    restoringHistory.current = true;
+    previousFields.current = [];
+    setFormFields([]);
+    setUndoStack([]);
+    setRedoStack([]);
+    setSigState(null);
+    setZoom(1);
+  };
+
+  const undo = () => {
+    setUndoStack(stack => {
+      const previous = stack.at(-1);
+      if (!previous) return stack;
+      restoringHistory.current = true;
+      setRedoStack(redo => [...redo, formFields]);
+      setFormFields(previous);
+      return stack.slice(0, -1);
+    });
+  };
+
+  const redo = () => {
+    setRedoStack(stack => {
+      const next = stack.at(-1);
+      if (!next) return stack;
+      restoringHistory.current = true;
+      setUndoStack(undoHistory => [...undoHistory, formFields]);
+      setFormFields(next);
+      return stack.slice(0, -1);
+    });
+  };
 
   const handleUploadAndDetect = async (selectedFile: File) => {
     setLoading(true);
     const formData = new FormData();
     formData.append('file', selectedFile);
     try {
-      const response = await axios.post('/api/pdf/upload', formData);
+      const response = await axios.post<{ results: DetectionResult }>('/api/pdf/upload', formData);
       setResults(response.data.results);
       if (response.data.results.fields) {
-        const detectedFields: FormField[] = response.data.results.fields.map((f: any, i: number) => ({
+        const detectedFields: FormField[] = response.data.results.fields.map((f, i) => ({
           id: `auto_${i}`, pageIndex: f.pageIndex, type: f.type,
           x: f.x, y: f.y, width: f.width, height: f.height,
           value: f.type === 'checkbox' ? false : '', color: currentColor
@@ -197,12 +270,12 @@ export default function Home() {
     } catch (error) {
       console.error('Error uploading file:', error);
       if (axios.isAxiosError(error) && !error.response) {
-        alert("Le service d'analyse PDF est indisponible. Lancez l'application avec start.bat puis réessayez.");
+        alert(t('loadError'));
       } else if (axios.isAxiosError(error)) {
         const detail = error.response?.data?.detail;
-        alert(detail ? `Impossible d'analyser ce PDF : ${detail}` : "Impossible d'analyser ce PDF.");
+        alert(detail ? `${t('loadError')} ${detail}` : t('loadError'));
       } else {
-        alert("Une erreur inattendue est survenue pendant l'analyse du PDF.");
+        alert(t('loadError'));
       }
     } finally {
       setLoading(false);
@@ -210,10 +283,12 @@ export default function Home() {
   };
 
   const processFile = async (selectedFile: File) => {
+    if (formFields.length > 0 && !window.confirm(t('replaceConfirm'))) return;
+    if (fileUrl) URL.revokeObjectURL(fileUrl);
     setFile(selectedFile);
     setFileUrl(URL.createObjectURL(selectedFile));
     setResults(null);
-    setFormFields([]);
+    resetDocumentState();
     const buffer = await selectedFile.arrayBuffer();
     setFileBuffer(buffer);
     if (AUTOMATIC_DETECTION_ENABLED) {
@@ -232,7 +307,7 @@ export default function Home() {
     setIsDragging(false);
     const f = e.dataTransfer.files?.[0];
     if (f?.type === 'application/pdf') processFile(f);
-    else alert('Please drop a valid PDF file.');
+    else alert(t('invalidPdf'));
   };
 
   // Called by PdfViewer when user clicks/draws on the PDF in 'signature' mode
@@ -303,7 +378,7 @@ export default function Home() {
       document.body.removeChild(link);
     } catch (error) {
       console.error('Error saving PDF:', error);
-      alert('Error saving the PDF document.');
+      alert(t('saveError'));
     }
   };
 
@@ -316,6 +391,7 @@ export default function Home() {
       {sigState === 'drawing' && (
         <SignaturePad
           onClose={() => { setSigState(null); setCurrentTool('text'); }}
+          t={t}
           onSave={(dataUrl) => {
             setSigState(dataUrl); // Ready to place on click
             setCurrentTool('signature');
@@ -334,17 +410,17 @@ export default function Home() {
           <div className="w-10 h-px bg-slate-200 mb-1" />
 
           {/* Drawing Tools */}
-          <ToolButton active={currentTool === 'text'} color="text-blue-600" onClick={() => setCurrentTool('text')} title="Text Field">
+          <ToolButton active={currentTool === 'text'} color="text-blue-600" onClick={() => setCurrentTool('text')} title={t('text')}>
             <IconType />
-            Text
+            {t('text')}
           </ToolButton>
-          <ToolButton active={currentTool === 'date'} color="text-emerald-600" onClick={() => setCurrentTool('date')} title="Date Picker">
+          <ToolButton active={currentTool === 'date'} color="text-emerald-600" onClick={() => setCurrentTool('date')} title={t('date')}>
             <IconCalendar />
-            Date
+            {t('date')}
           </ToolButton>
-          <ToolButton active={currentTool === 'checkbox'} color="text-purple-600" onClick={() => setCurrentTool('checkbox')} title="Checkbox">
+          <ToolButton active={currentTool === 'checkbox'} color="text-purple-600" onClick={() => setCurrentTool('checkbox')} title={t('check')}>
             <IconCheckSquare />
-            Check
+            {t('check')}
           </ToolButton>
 
           <div className="w-10 h-px bg-slate-200 my-1" />
@@ -361,7 +437,7 @@ export default function Home() {
                 setSigState('drawing');
               }
             }}
-            title={isSignatureReady ? 'Click on PDF to place' : 'Draw Signature'}
+            title={isSignatureReady ? t('placeSignature') : t('drawSignature')}
           >
             <div className="relative">
               <IconPen />
@@ -369,16 +445,16 @@ export default function Home() {
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
               )}
             </div>
-            {isSignatureReady ? 'Place' : 'Sign'}
+            {isSignatureReady ? t('place') : t('sign')}
           </ToolButton>
 
           {isSignatureReady && (
             <button
               onClick={() => { setSigState(null); setCurrentTool('text'); }}
-              title="Cancel signature"
+              title={t('cancel')}
               className="text-[10px] text-slate-400 hover:text-rose-500 transition-colors px-1 -mt-1"
             >
-              Cancel
+              {t('cancel')}
             </button>
           )}
 
@@ -391,17 +467,22 @@ export default function Home() {
               value={currentColor}
               onChange={(e) => setCurrentColor(e.target.value)}
               className="w-9 h-9 rounded-lg cursor-pointer border-2 border-slate-200 p-0.5 bg-white"
-              title="Text Color"
+              title={t('color')}
             />
-            <span className="text-[10px] text-slate-400">Color</span>
+            <span className="text-[10px] text-slate-400">{t('color')}</span>
           </div>
 
           <div className="w-10 h-px bg-slate-200 my-1" />
 
           {/* Zoom */}
-          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Zoom In"><IconZoomIn /></button>
+          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title={t('zoomIn')} aria-label={t('zoomIn')}><IconZoomIn /></button>
           <span className="text-[10px] text-slate-500 font-medium">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Zoom Out"><IconZoomOut /></button>
+          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title={t('zoomOut')} aria-label={t('zoomOut')}><IconZoomOut /></button>
+
+          <div className="flex gap-1">
+            <button onClick={undo} disabled={undoStack.length === 0} className="p-2 text-xs text-slate-500 hover:bg-slate-100 rounded-lg disabled:text-slate-200" title={t('undo')} aria-label={t('undo')}>↶</button>
+            <button onClick={redo} disabled={redoStack.length === 0} className="p-2 text-xs text-slate-500 hover:bg-slate-100 rounded-lg disabled:text-slate-200" title={t('redo')} aria-label={t('redo')}>↷</button>
+          </div>
 
           {/* Spacer */}
           <div className="flex-1" />
@@ -410,19 +491,29 @@ export default function Home() {
           <button
             onClick={saveAndDownloadPdf}
             disabled={formFields.length === 0}
-            title="Export PDF"
+            title={t('exportPdf')}
             className="flex flex-col items-center gap-1 p-3 rounded-xl w-full text-[11px] font-semibold transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 shadow-md shadow-blue-600/20"
           >
             <IconDownload />
-            Export
+            {t('export')}
           </button>
 
           {/* Change file */}
-          <label className="flex flex-col items-center gap-1 p-2 rounded-xl w-full text-[11px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-all" title="Open another PDF">
+          <label className="flex flex-col items-center gap-1 p-2 rounded-xl w-full text-[11px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-all" title={t('openAnother')}>
             <IconFilePdf />
-            Open
+            {t('open')}
             <input type="file" accept="application/pdf" onChange={onFileChange} className="hidden" />
           </label>
+
+          <select
+            value={language}
+            onChange={(event) => { const next = event.target.value as Language; setLanguage(next); document.documentElement.lang = next; }}
+            aria-label={t('language')}
+            title={t('language')}
+            className="w-14 rounded-lg border border-slate-200 bg-white px-1 py-1 text-[10px] text-slate-600"
+          >
+            {supportedLanguages.map(code => <option key={code} value={code}>{code.toUpperCase()}</option>)}
+          </select>
         </aside>
       )}
 
@@ -436,7 +527,13 @@ export default function Home() {
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">PDF Editor Studio</h1>
-            <p className="text-slate-400 font-medium">Analyze, fill, and sign your documents</p>
+            <p className="text-slate-400 font-medium text-center px-4">{t('tagline')}</p>
+            <label className="mt-3 text-sm text-slate-500 flex items-center gap-2">
+              {t('language')}
+              <select value={language} onChange={(event) => { const next = event.target.value as Language; setLanguage(next); document.documentElement.lang = next; }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700">
+                {supportedLanguages.map(code => <option key={code} value={code}>{({ en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch', pt: 'Português', zh: '中文' } as Record<Language, string>)[code]}</option>)}
+              </select>
+            </label>
           </header>
         )}
 
@@ -447,11 +544,11 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse" />
                 <p className="font-semibold text-amber-800 text-sm">
-                  Click or draw on the document to place your signature
+                  {t('placeSignature')}
                 </p>
               </div>
               <button onClick={() => { setSigState(null); setCurrentTool('text'); }} className="text-amber-500 hover:text-amber-700 text-sm font-medium px-3 py-1 hover:bg-amber-100 rounded-lg transition-all">
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>
@@ -476,16 +573,18 @@ export default function Home() {
                 currentTool={currentTool}
                 currentColor={currentColor}
                 onSignatureRequest={handleSignatureRequest}
+                t={t}
               />
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-full min-h-[560px] border-4 border-dashed border-blue-200 rounded-2xl bg-blue-50/40 hover:bg-blue-50 cursor-pointer transition-all group">
                 <div className="bg-blue-100 text-blue-500 p-8 rounded-full mb-5 group-hover:scale-110 transition-transform duration-300">
                   <IconUpload />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-700 mb-2">Drag & Drop a PDF Here</h3>
-            <p className="text-slate-400 font-medium mb-8 text-center max-w-sm text-sm">Or click to browse. Add text, date, checkbox, and signature fields wherever you need them.</p>
+                <h3 className="text-2xl font-bold text-slate-700 mb-2">{t('dropTitle')}</h3>
+                <p className="text-slate-400 font-medium mb-3 text-center max-w-sm text-sm">{t('dropHint')}</p>
+                <p className="text-slate-400 mb-8 text-center max-w-sm text-xs">{t('privacy')}</p>
                 <div className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 group-hover:bg-blue-700 transition-all">
-                  Browse Files
+                  {t('browse')}
                 </div>
                 <input type="file" accept="application/pdf" onChange={onFileChange} className="hidden" />
               </label>

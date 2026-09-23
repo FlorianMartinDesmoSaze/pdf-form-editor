@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import type { TranslationKey } from './i18n';
 
 export interface FormField {
   id: string;
@@ -27,6 +28,7 @@ interface PdfViewerProps {
   currentTool: 'text' | 'date' | 'checkbox' | 'signature';
   currentColor: string;
   onSignatureRequest: (pageIndex: number, x: number, y: number, width: number, height: number) => void;
+  t: (key: TranslationKey) => string;
 }
 
 // Inline SVGs for PdfViewer
@@ -35,17 +37,30 @@ const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" heigh
 const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 
 export default function PdfViewer({
-  fileUrl, numPages, setNumPages, formFields, setFormFields, zoom, currentTool, currentColor, onSignatureRequest
+  fileUrl, numPages, setNumPages, formFields, setFormFields, zoom, currentTool, currentColor, onSignatureRequest, t
 }: PdfViewerProps) {
 
   const pagesRef = useRef<(HTMLDivElement | null)[]>([]);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
+  const [availableWidth, setAvailableWidth] = useState(800);
   
   const [drawingField, setDrawingField] = useState<FormField | null>(null);
   const drawStartRef = useRef({ x: 0, y: 0, pageIndex: -1 });
 
   useEffect(() => {
-    pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    // Bundle the worker with the app so viewing PDFs does not depend on a third-party CDN.
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
   }, []);
+
+  useEffect(() => {
+    const container = viewerContainerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setAvailableWidth(Math.max(280, entry.contentRect.width - 24)));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  const pageWidth = Math.min(800 * zoom, availableWidth);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -62,15 +77,14 @@ export default function PdfViewer({
     
     drawStartRef.current = { x, y, pageIndex };
     
-    const today = new Date().toISOString().split('T')[0];
-    
+    const fieldType: FormField['type'] = currentTool === 'signature' ? 'image' : currentTool;
     setDrawingField({
-      id: `manual_${Date.now()}`,
+      id: `manual_${crypto.randomUUID()}`,
       pageIndex,
-      type: currentTool === 'signature' ? 'image' : currentTool as any,
+      type: fieldType,
       x, y,
       width: 0, height: 0,
-      value: currentTool === 'date' ? today : currentTool === 'checkbox' ? true : '',
+      value: currentTool === 'checkbox' ? false : '',
       color: currentColor
     });
   };
@@ -149,7 +163,11 @@ export default function PdfViewer({
       
       setFormFields(prev => prev.map(f => {
         if (f.id === id) {
-          return { ...f, x: f.x + pctX, y: f.y + pctY };
+          return {
+            ...f,
+            x: Math.max(0, Math.min(100 - f.width, f.x + pctX)),
+            y: Math.max(0, Math.min(100 - f.height, f.y + pctY)),
+          };
         }
         return f;
       }));
@@ -161,6 +179,34 @@ export default function PdfViewer({
       target.removeEventListener('pointerup', onPointerUp);
     };
     
+    target.addEventListener('pointermove', onPointerMove);
+    target.addEventListener('pointerup', onPointerUp);
+  };
+
+  const handleResizePointerDown = (e: React.PointerEvent<HTMLElement>, id: string, pageIndex: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const pageElement = pagesRef.current[pageIndex];
+    if (!pageElement) return;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const rect = pageElement.getBoundingClientRect();
+      setFormFields(prev => prev.map(field => {
+        if (field.id !== id) return field;
+        return {
+          ...field,
+          width: Math.max(2, Math.min(100 - field.x, ((moveEvent.clientX - rect.left) / rect.width) * 100 - field.x)),
+          height: Math.max(2, Math.min(100 - field.y, ((moveEvent.clientY - rect.top) / rect.height) * 100 - field.y)),
+        };
+      }));
+    };
+    const onPointerUp = () => {
+      target.releasePointerCapture(e.pointerId);
+      target.removeEventListener('pointermove', onPointerMove);
+      target.removeEventListener('pointerup', onPointerUp);
+    };
     target.addEventListener('pointermove', onPointerMove);
     target.addEventListener('pointerup', onPointerUp);
   };
@@ -177,11 +223,15 @@ export default function PdfViewer({
   const SIGNATURE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f59e0b' fill-opacity='0.15' stroke='%23f59e0b' stroke-width='1.5'/%3E%3Cg transform='translate(8,7)'%3E%3Cpath d='M12 2l2 2-10 10-2 0 0-2z' fill='%23f59e0b'/%3E%3Cpath d='M0 14l0.5-2 1.5 1.5z' fill='%23d97706'/%3E%3Cpath d='M13 1l2 2' stroke='%23d97706' stroke-width='1' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 16 16, crosshair`;
 
   return (
-    <Document
-      file={fileUrl}
-      onLoadSuccess={onDocumentLoadSuccess}
-      className="flex flex-col gap-8 select-none my-4 items-center"
-    >
+    <div ref={viewerContainerRef} className="w-full min-w-0">
+      <Document
+        file={fileUrl}
+        onLoadSuccess={onDocumentLoadSuccess}
+        onLoadError={() => setNumPages(0)}
+        loading={<p className="text-slate-500 p-6" role="status">Loading PDF…</p>}
+        error={<p className="text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-5 m-4 max-w-md text-center" role="alert">{t('loadError')}</p>}
+        className="flex flex-col gap-8 select-none my-4 items-center"
+      >
       {Array.from(new Array(numPages || 0), (el, index) => (
         <div
           key={`page_${index}`}
@@ -192,7 +242,7 @@ export default function PdfViewer({
               : 'border-slate-300 cursor-crosshair hover:shadow-blue-900/10'
           }`}
           style={{
-            width: `${800 * zoom}px`,
+            width: `${pageWidth}px`,
             cursor: currentTool === 'signature' ? SIGNATURE_CURSOR : 'crosshair',
           }}
           onPointerDown={(e) => handlePagePointerDown(e, index)}
@@ -205,7 +255,7 @@ export default function PdfViewer({
             pageNumber={index + 1} 
             renderTextLayer={false}
             renderAnnotationLayer={false}
-            width={800 * zoom}
+            width={pageWidth}
           />
           
           {drawingField && drawingField.pageIndex === index && (
@@ -234,11 +284,19 @@ export default function PdfViewer({
               <div 
                 className="absolute -left-10 top-1/2 -translate-y-1/2 w-10 h-10 hidden group-hover:flex items-center justify-center z-30 cursor-move"
                 onPointerDown={(e) => handleDragPointerDown(e, field.id, index)}
+                title={t('moveField')}
               >
                 <div className="bg-slate-700 hover:bg-slate-800 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg transition-transform hover:scale-110">
                   <IconMove />
                 </div>
               </div>
+
+              <button
+                onPointerDown={(e) => handleResizePointerDown(e, field.id, index)}
+                className="absolute -right-1 -bottom-1 w-3 h-3 rounded-sm bg-blue-600 border border-white shadow-sm opacity-0 group-hover:opacity-100 focus:opacity-100 z-30 cursor-nwse-resize"
+                title={t('resizeField')}
+                aria-label={t('resizeField')}
+              />
 
               {field.type === 'text' ? (
                 <input
@@ -279,7 +337,8 @@ export default function PdfViewer({
               <button 
                 onClick={(e) => { e.stopPropagation(); handleDeleteField(field.id); }}
                 className="absolute -right-10 top-1/2 -translate-y-1/2 w-10 h-10 hidden group-hover:flex items-center justify-center z-30"
-                title="Supprimer"
+                title={t('deleteField')}
+                aria-label={t('deleteField')}
               >
                 <div className="bg-rose-500 hover:bg-rose-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg transition-transform hover:scale-110">
                   <IconTrash />
@@ -289,6 +348,7 @@ export default function PdfViewer({
           ))}
         </div>
       ))}
-    </Document>
+      </Document>
+    </div>
   );
 }
