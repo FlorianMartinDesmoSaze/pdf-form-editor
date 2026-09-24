@@ -179,6 +179,20 @@ export default function Home() {
   const previousFields = useRef<FormField[]>([]);
   const restoringHistory = useRef(false);
   const [language, setLanguage] = useState<Language>('en');
+  const [exportResult, setExportResult] = useState<{ url: string; name: string } | null>(null);
+  const [showExportSuccess, setShowExportSuccess] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [savedFields, setSavedFields] = useState('[]');
+  const hasUnsavedChanges = JSON.stringify(formFields) !== savedFields;
+  const successHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    return () => { if (exportResult) URL.revokeObjectURL(exportResult.url); };
+  }, [exportResult]);
+
+  useEffect(() => {
+    if (showExportSuccess) successHeading.current?.focus();
+  }, [showExportSuccess]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -212,13 +226,13 @@ export default function Home() {
 
   useEffect(() => {
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
-      if (formFields.length === 0) return;
+      if (!hasUnsavedChanges) return;
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [formFields.length]);
+  }, [hasUnsavedChanges]);
 
   const resetDocumentState = () => {
     restoringHistory.current = true;
@@ -228,6 +242,9 @@ export default function Home() {
     setRedoStack([]);
     setSigState(null);
     setZoom(1);
+    setSavedFields('[]');
+    setShowExportSuccess(false);
+    setExportResult(null);
   };
 
   const undo = () => {
@@ -283,7 +300,7 @@ export default function Home() {
   };
 
   const processFile = async (selectedFile: File) => {
-    if (formFields.length > 0 && !window.confirm(t('replaceConfirm'))) return;
+    if (hasUnsavedChanges && !window.confirm(t('replaceConfirm'))) return;
     if (fileUrl) URL.revokeObjectURL(fileUrl);
     setFile(selectedFile);
     setFileUrl(URL.createObjectURL(selectedFile));
@@ -325,7 +342,8 @@ export default function Home() {
   };
 
   const saveAndDownloadPdf = async () => {
-    if (!fileBuffer) return;
+    if (!fileBuffer || isExporting) return;
+    setIsExporting(true);
     try {
       const pdfDoc = await PDFDocument.load(fileBuffer);
       const pages = pdfDoc.getPages();
@@ -376,9 +394,14 @@ export default function Home() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setExportResult({ url, name: link.download });
+      setSavedFields(JSON.stringify(formFields));
+      setShowExportSuccess(true);
     } catch (error) {
       console.error('Error saving PDF:', error);
       alert(t('saveError'));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -400,7 +423,7 @@ export default function Home() {
       )}
 
       {/* === LEFT SIDEBAR TOOLBAR === */}
-      {fileUrl && (
+      {fileUrl && !showExportSuccess && (
         <aside className="w-20 flex-shrink-0 sticky top-0 h-screen flex flex-col items-center gap-2 bg-white border-r border-slate-200 shadow-sm py-4 z-30 overflow-y-auto">
           {/* Logo */}
           <div className="bg-blue-600 p-2 rounded-xl mb-3 text-white">
@@ -490,7 +513,7 @@ export default function Home() {
           {/* Export */}
           <button
             onClick={saveAndDownloadPdf}
-            disabled={formFields.length === 0}
+            disabled={formFields.length === 0 || isExporting}
             title={t('exportPdf')}
             className="flex flex-col items-center gap-1 p-3 rounded-xl w-full text-[11px] font-semibold transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 shadow-md shadow-blue-600/20"
           >
@@ -519,6 +542,35 @@ export default function Home() {
 
       {/* === MAIN CONTENT === */}
       <div className="flex-1 flex flex-col min-w-0">
+
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm">
+          <span className="truncate text-sm font-semibold text-slate-700">PDF Editor Studio</span>
+          <a href="https://ko-fi.com/desmosaze" target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">{t('support')}</a>
+        </div>
+
+        {showExportSuccess && exportResult ? (
+          <main className="flex flex-1 items-center justify-center p-6">
+            <section className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10">
+              <div aria-hidden="true" className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-3xl text-emerald-700">✓</div>
+              <h1 ref={successHeading} tabIndex={-1} className="text-2xl font-bold text-slate-900">{t('exportSuccess')}</h1>
+              <p className="mt-3 text-slate-600">{t('exportSuccessText')}</p>
+              <p className="mt-2 break-words text-sm text-slate-500">{exportResult.name}</p>
+              <a href={exportResult.url} download={exportResult.name} className="mt-4 inline-block text-sm font-semibold text-blue-700 underline">{t('downloadAgain')}</a>
+              <div className="mt-7 flex flex-col gap-3">
+                <button onClick={() => {
+                  if (fileUrl) URL.revokeObjectURL(fileUrl);
+                  setFile(null); setFileUrl(null); setFileBuffer(null); setNumPages(null); setResults(null);
+                  resetDocumentState();
+                }} className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">{t('editAnother')}</button>
+                <button onClick={() => setShowExportSuccess(false)} className="rounded-xl border border-slate-200 px-5 py-3 font-semibold text-slate-600 hover:bg-slate-50">{t('continueEditing')}</button>
+              </div>
+              <div className="mt-8 border-t border-slate-100 pt-6">
+                <p className="text-sm text-slate-500">{t('supportText')}</p>
+                <a href="https://ko-fi.com/desmosaze" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block rounded-xl bg-rose-50 px-5 py-3 font-semibold text-rose-700 hover:bg-rose-100">{t('support')}</a>
+              </div>
+            </section>
+          </main>
+        ) : <>
 
         {/* Header — only on landing */}
         {!fileUrl && (
@@ -658,6 +710,7 @@ export default function Home() {
             </div>
           </section>
         )}
+        </>}
       </div>
     </div>
   );
