@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description: "Fill in PDF forms, add text, dates, checkboxes and signatures online. Your document stays in your browser: no account, no upload and no watermark.",
   alternates: { canonical: "/" },
   robots: { index: true, follow: true },
+  verification: { google: "yBpn3aGWo1_bEaHbwqpqUOtX6x7O2X26hbLsXtBLFyw" },
   openGraph: {
     title: "Fill & Sign PDF Online — Private & Free",
     description: "Fill, sign and download PDFs directly in your browser. No account or upload required.",
