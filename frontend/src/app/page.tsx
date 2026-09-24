@@ -526,8 +526,9 @@ export default function Home() {
             <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-600/20 mb-2 text-white">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">PDF Editor Studio</h1>
-            <p className="text-slate-400 font-medium text-center px-4">{t('tagline')}</p>
+            <p className="text-sm font-semibold tracking-wide text-blue-600">PDF Editor Studio</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 text-center px-4">{t('seoHeading')}</h1>
+            <p className="text-slate-400 font-medium text-center px-4">{t('seoLead')}</p>
             <label className="mt-3 text-sm text-slate-500 flex items-center gap-2">
               {t('language')}
               <select value={language} onChange={(event) => { const next = event.target.value as Language; setLanguage(next); document.documentElement.lang = next; }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700">
@@ -623,6 +624,29 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {!fileUrl && (
+          <section className="mx-auto w-full max-w-5xl px-4 pb-16 pt-8" aria-labelledby="about-pdf-editor">
+            <div className="rounded-2xl bg-white p-7 shadow-sm border border-slate-200">
+              <h2 id="about-pdf-editor" className="text-2xl font-bold text-slate-800 text-center">{t('howTitle')}</h2>
+              <p className="mx-auto mt-3 max-w-3xl text-center text-slate-500">{t('howText')}</p>
+              <div className="mt-7 grid gap-4 md:grid-cols-3">
+                <article className="rounded-xl bg-blue-50 p-5">
+                  <h3 className="font-bold text-slate-800">{t('featurePrivate')}</h3>
+                  <p className="mt-2 text-sm text-slate-600">{t('featurePrivateText')}</p>
+                </article>
+                <article className="rounded-xl bg-emerald-50 p-5">
+                  <h3 className="font-bold text-slate-800">{t('featureFree')}</h3>
+                  <p className="mt-2 text-sm text-slate-600">{t('featureFreeText')}</p>
+                </article>
+                <article className="rounded-xl bg-violet-50 p-5">
+                  <h3 className="font-bold text-slate-800">{t('featureFlexible')}</h3>
+                  <p className="mt-2 text-sm text-slate-600">{t('featureFlexibleText')}</p>
+                </article>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
