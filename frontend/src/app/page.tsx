@@ -644,6 +644,17 @@ export default function Home() {
                   <p className="mt-2 text-sm text-slate-600">{t('featureFlexibleText')}</p>
                 </article>
               </div>
+              <div className="mt-7 border-t border-slate-100 pt-5 text-center">
+                <p className="text-sm text-slate-500">{t('supportText')}</p>
+                <a
+                  href="https://ko-fi.com/desmosaze"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  {t('support')}
+                </a>
+              </div>
             </div>
           </section>
         )}
